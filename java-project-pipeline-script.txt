@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Clone Github Repository') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/Narayan-7474/jenkins-tutorial.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'mvn clean package'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'mvn compile'
+                }
+            }
+        }
+
+        stage('Docker image Build') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'docker build -t java-jenkins-docker:latest .'
+                }
+            }
+        }
+
+        stage('Docker Run') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'docker run --rm java-jenkins-docker:latest'
+                }
+            }
+        }
+
+        stage('Docker image Tag') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'docker tag java-jenkins-docker:latest narayand/java-jenkins-docker:latest'
+                }
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Docker image push') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    sh 'docker push narayand/java-jenkins-docker:latest'
+                }
+            }
+        }
+
+        stage('Cleaning Workspace') {
+            steps {
+                dir('3-java-jenkins-docker-app') {
+                    cleanWs()
+                }
+            }
+        }
+    }
+}
