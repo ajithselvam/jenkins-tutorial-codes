@@ -1,0 +1,46 @@
+1. The Root Cause
+The Docker daemon communicates through a Unix socket. By default, this socket is owned by root, and group access is restricted to the docker group.
+
+Your user: root (can access it).
+
+Jenkins user: jenkins (cannot access it).
+
+2. The Solution: Add Jenkins to the Docker Group
+The cleanest way to fix this is to give the jenkins user the necessary permissions without compromising the security of your entire VM.
+
+Run these commands from your terminal (as root):
+
+Create the docker group (if it doesn't already exist):
+
+Bash
+sudo groupadd docker
+Add the jenkins user to the group:
+
+Bash
+sudo usermod -aG docker jenkins
+Restart Jenkins:
+For the group membership to take effect, the Jenkins service must be restarted.
+
+Bash
+sudo systemctl restart jenkins
+3. Verification
+Once Jenkins restarts, you can verify the fix by running a simple shell command inside a Jenkins pipeline or the "Execute Shell" build step:
+
+Bash
+docker ps
+If it returns an empty list (or a list of running containers) instead of a permission error, you’re in the clear.
+
+4. The "Quick & Dirty" (Not Recommended)
+If the above doesn't work due to specific environment configurations, you can manually change the permissions of the socket. Note: This is less secure because it opens the socket to everyone on the VM.
+
+Bash
+sudo chmod 666 /var/run/docker.sock
+[!WARNING]
+
+This change is temporary; permissions may reset when the VM or Docker restarts. Using the usermod method in Step 2 is the industry standard.
+
+5. Check GCP-Specific Constraints
+If you are using Container-Optimized OS (COS) on GCP, the file system is locked down. However, if you are on a standard Debian/Ubuntu/RHEL image, the steps above will work perfectly.
+
+If you are running Jenkins inside a Docker container on that VM (Docker-in-Docker), you need to ensure you are mounting the socket with the correct permissions:
+-v /var/run/docker.sock:/var/run/docker.sock
