@@ -1,0 +1,9 @@
+stage('K8s Deploy') {
+            steps {
+                // We use the absolute path to the file on your VM
+                sh 'kubectl apply -f /opt/k8s/deployment.yaml'
+                
+                // This ensures K8s pulls the newest image version
+                sh 'kubectl rollout restart deployment/java-app'
+            }
+        }
