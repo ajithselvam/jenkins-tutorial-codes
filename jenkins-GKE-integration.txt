@@ -1,0 +1,86 @@
+The easiest way on GCP is:
+
+Generate kubeconfig on the Jenkins VM
+Copy it directly into Jenkins credentials as Secret text
+Use it in the pipeline
+
+You do NOT need service accounts or complex IAM setup for a lab/demo environment.
+
+Simplest GKE + Jenkins Setup
+Step 1 — SSH into Jenkins VM
+
+Run:
+
+gcloud auth login
+
+Then:
+
+gcloud config set project qwiklabs-gcp-00-51f10c61c084
+Step 2 — Install kubectl
+sudo apt update
+sudo apt install kubectl google-cloud-sdk-gke-gcloud-auth-plugin -y
+Step 3 — Connect to GKE Cluster
+
+Run:
+
+gcloud container clusters get-credentials CLUSTER_NAME --zone us-central1-a
+
+Example:
+
+gcloud container clusters get-credentials my-cluster --zone us-central1-a
+Step 4 — Verify
+kubectl get nodes
+
+If nodes appear, you're done with cluster setup.
+
+Step 5 — Copy kubeconfig
+
+Run:
+
+cat ~/.kube/config
+
+Copy ALL output.
+
+Step 6 — Add to Jenkins
+
+Go to:
+
+Manage Jenkins
+→ Credentials
+→ Global
+→ Add Credentials
+
+Choose:
+
+Kind = Secret text
+
+Paste kubeconfig.
+
+Set:
+
+ID = kubeconfig
+
+Save.
+
+Step 7 — Jenkinsfile
+
+Use this:
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Deploy') {
+            steps {
+                withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        echo "$KUBECONFIG" > kubeconfig.yaml
+                        export KUBECONFIG=$PWD/kubeconfig.yaml
+
+                        kubectl apply -f sso.yaml
+                    '''
+                }
+            }
+        }
+    }
+}
