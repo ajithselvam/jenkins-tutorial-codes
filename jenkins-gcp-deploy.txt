@@ -1,0 +1,75 @@
+If your Kubernetes cluster is GKE (Google Kubernetes Engine), Jenkins must first authenticate to GCP and fetch the cluster credentials before running kubectl apply.
+
+A typical Jenkins pipeline looks like this:
+
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_ID   = "my-gcp-project"
+        CLUSTER_NAME = "my-gke-cluster"
+        REGION       = "asia-south1"   // or ZONE if zonal cluster
+    }
+
+    stages {
+        stage('Authenticate GCP') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GCP_KEY
+                        gcloud config set project $PROJECT_ID
+                    '''
+                }
+            }
+        }
+
+        stage('Connect to GKE') {
+            steps {
+                sh '''
+                    gcloud container clusters get-credentials \
+                        $CLUSTER_NAME \
+                        --region $REGION
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    kubectl apply -f sso.yaml
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh '''
+                    kubectl get pods
+                '''
+            }
+        }
+    }
+}
+Prerequisites
+
+On the Jenkins agent:
+
+gcloud CLI installed
+kubectl installed
+A GCP Service Account with permissions such as:
+Kubernetes Engine Developer/Admin
+Container Cluster Viewer
+(or equivalent IAM roles)
+Test manually on the Jenkins server
+
+Before using Jenkins, verify these commands work:
+
+gcloud auth activate-service-account --key-file=sa.json
+
+gcloud config set project my-gcp-project
+
+gcloud container clusters get-credentials my-gke-cluster --region asia-south1
+
+kubectl get nodes
+
+If kubectl get nodes works, the same commands will work in Jenkins.
