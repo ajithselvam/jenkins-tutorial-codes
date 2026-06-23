@@ -1,0 +1,29 @@
+If you don't want to modify the Jenkinsfile, you can add parameters from the Jenkins UI:
+
+Open the job.
+Click Configure.
+Check This project is parameterized (Freestyle) or go to General → This project is parameterized (Pipeline job).
+Add a parameter:
+String Parameter → name it BRANCH_NAME
+or Choice Parameter → provide a list of branches.
+Save.
+
+After saving, Jenkins will show Build with Parameters.
+
+However, the parameter by itself does nothing. The SCM configuration or Jenkinsfile must actually use ${BRANCH_NAME}.
+
+For a Pipeline job configured through the UI:
+
+In Pipeline Script from SCM → Branch Specifier, use:
+
+*/${BRANCH_NAME}
+
+For a Freestyle job:
+
+In Source Code Management → Git → Branches to build, use:
+
+*/${BRANCH_NAME}
+
+Then when you click Build with Parameters, you can enter main, develop, feature/test, etc., and Jenkins will build that branch.
+
+What type of job is it: Pipeline (Script from SCM), Pipeline, or Freestyle? I can give the
