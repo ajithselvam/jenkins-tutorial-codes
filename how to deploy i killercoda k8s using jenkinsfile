@@ -1,0 +1,20 @@
+
+
+
+how to deploy i killercoda k8s using jenkinsfile
+
+
+
+pipeline {
+    agent any 
+    
+    environment {
+        KUBECONFIG = credentials('killercoda')
+    }
+    
+    stages {
+        stage ('deploy k8s'){
+            sh 'kubectl version --client'
+        }
+    }
+}
