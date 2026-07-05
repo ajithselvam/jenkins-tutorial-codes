@@ -1,0 +1,22 @@
+he reason you are seeing the exact same error is because Jenkins changed their keys again to an updated certificate (jenkins.io-2026.key).
+To fix this, we need to completely wipe the broken file and pull the updated key. Run these exact steps in your terminal:
+1. Delete the old list file
+Let's clear out the existing configuration to ensure there are no conflicting keys.
+Bash
+sudo rm -f /etc/apt/sources.list.d/jenkins.list
+2. Download the updated Key
+Download the updated keyring file directly to the correct Debian keyrings path:
+Bash
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+3. Re-create the Repository File
+Generate a fresh source file that forces apt to explicitly use the new keyring for Jenkins:
+Bash
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/" | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+4. Update and Install
+Now, refresh your package index. You should see it pull from Jenkins without any GPG errors, allowing you to install the package:
+Bash
+sudo apt update
+sudo apt install jenkins -y
