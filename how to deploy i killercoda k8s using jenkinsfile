@@ -11,6 +11,14 @@ pipeline {
     environment {
         KUBECONFIG = credentials('killercoda')
     }
+
+
+   or use this 
+
+
+     environment {
+        KUBE_CREDENTIAL_ID = 'kubeconfig'
+    }
     
     stages {
         stage ('deploy k8s'){
