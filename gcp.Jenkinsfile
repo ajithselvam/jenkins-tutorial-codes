@@ -1,47 +1,74 @@
-environment {
-    GCP_PROJECT_ID     = 'your-project-id'
-    GKE_CLUSTER_NAME   = 'your-gke-cluster'
-    GKE_CLUSTER_REGION = 'us-east4'
-    ARTIFACT_REGISTRY  = 'us-east4-docker.pkg.dev'
+pipeline {
 
-    // Jenkins Secret File credential (Google Cloud service account JSON)
-    GCP_SA_KEY = credentials('gcp-devops-sa')
-}
+    agent any
 
-stages {
-    stage('Configure GCP & Deploy') {
-        steps {
-            sh '''
-                set -e
+    environment {
+        // Google Cloud
+        GCP_PROJECT_ID     = 'experience-production-430905'
+        GKE_CLUSTER_NAME   = 'experience-gke-production'
+        GKE_CLUSTER_REGION = 'us-east4'
+        ARTIFACT_REGISTRY  = 'us-east4-docker.pkg.dev'
 
-                echo "Authenticating with Google Cloud..."
-                gcloud auth activate-service-account \
-                    --key-file="$GCP_SA_KEY"
+        // Jenkins Secret File credential (Google Service Account JSON)
+        GCP_SA_KEY = credentials('gcp-devops-sa')
+    }
 
-                echo "Setting project..."
-                gcloud config set project "$GCP_PROJECT_ID"
+    stages {
 
-                echo "Configuring Docker authentication..."
-                gcloud auth configure-docker "$ARTIFACT_REGISTRY" --quiet
+        stage('Configure GCP') {
+            steps {
+                sh '''
+                    set -euo pipefail
 
-                echo "Fetching GKE credentials..."
-                gcloud container clusters get-credentials \
-                    "$GKE_CLUSTER_NAME" \
-                    --region "$GKE_CLUSTER_REGION"
+                    echo "Authenticating with Google Cloud..."
+                    gcloud auth activate-service-account \
+                        --key-file="$GCP_SA_KEY"
 
-                echo "Applying Kubernetes manifests..."
-                kubectl apply -f /root/deploy.yaml
+                    echo "Setting GCP project..."
+                    gcloud config set project "$GCP_PROJECT_ID"
 
-                echo "Deployment completed successfully."
-            '''
+                    echo "Configuring Docker authentication..."
+                    gcloud auth configure-docker "$ARTIFACT_REGISTRY" --quiet
+
+                    echo "Getting GKE credentials..."
+                    gcloud container clusters get-credentials \
+                        "$GKE_CLUSTER_NAME" \
+                        --region "$GKE_CLUSTER_REGION"
+
+                    echo "Connected to cluster:"
+                    kubectl cluster-info
+                '''
+            }
+        }
+
+        stage('Deploy to GKE') {
+            steps {
+                sh '''
+                    set -euo pipefail
+
+                    echo "Applying Kubernetes manifests..."
+                    kubectl apply -f /root/deploy.yaml
+
+                    echo "Waiting for deployment rollout..."
+                    kubectl rollout status deployment/<deployment-name>
+
+                    echo "Deployment completed successfully."
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Production deployment completed successfully.'
+        }
+
+        failure {
+            echo '❌ Production deployment failed.'
+        }
+
+        always {
+            echo 'Pipeline execution finished.'
         }
     }
 }
-
-This stage will:
-
-Authenticate to Google Cloud using the Jenkins credential.
-Set the active GCP project.
-Configure Docker to push/pull from Artifact Registry.
-Connect to your GKE cluster.
-Apply the Kubernetes manifest located at /root/deploy.yaml.
