@@ -1,0 +1,61 @@
+pipeline {
+agent any
+ environment {
+    GCP_PROJECT_ID = kjbkb3iku45gu34b5ukj
+    GCP_SA_KEY = credentials('gcpsakey')
+    GKE_CLUSTER_NAME = ajith-cluster
+    GKE_CLUSTER_REGION = us-central1
+    ARTIFACT_REGISTRY = us-central1-docker.pkg.dev
+
+}
+
+stages{
+stage('config gcp'){
+  steps{
+    sh '''
+      set -euo pipefail
+   gcloud auth activate-service-account --keyfile="$GCP_SA_KEY"
+
+gcloud config set project "$GCP_PROJECT_ID"
+
+gcloud auth configure-docker "$ARTIFACT_REGISTRY" --quiet
+
+gcloud container clusters get-credentials "$GKE_CLUSTER_NAME" --region "$GKE_CLUSTER_REGION"
+
+kubectl cluster-info
+}
+}
+
+
+stage('deploy') {
+
+steps {
+  sh '''
+set -euo pipefail
+
+cd "$DIR"
+
+kubectl create -f sso.yaml
+
+sleep 5
+
+kubectl rollout status deploy/sso
+
+echo "deployment completed at$(date) by$(whoami)"
+
+}
+}
+}
+
+post {
+  success{
+    echo 'deploy success'
+  }
+  failure {
+  echo 'failed check logs'
+}
+  always {
+echo 'check logs'
+}
+}
+}
