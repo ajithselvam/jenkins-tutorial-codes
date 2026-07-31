@@ -142,6 +142,7 @@ pipeline {
                 echo 'fail'
             }
             always{
+                sh 'docker system prune -f'
                 cleanWs()
             }
         }
