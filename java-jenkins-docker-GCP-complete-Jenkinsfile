@@ -1,0 +1,182 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Existing Variables
+        DIR = '3-java-jenkins-docker-app'
+        IMAGE = 'java-jenkins-docker'
+        REPO = 'ajith567890/java-jenkins-docker'
+        
+        // New Variables for GCP & GKE
+        GCP_PROJECT_ID = 'your-gcp-project-id'
+        GCP_REGION = 'us-central1'
+        GAR_REPO_NAME = 'your-gar-repo'
+        GAR_IMAGE = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE}"
+        GKE_CLUSTER = 'your-gke-cluster-name'
+        GKE_ZONE = 'us-central1-a'
+    }
+    
+    stages {
+        stage('checkout') {
+            steps {
+                git(
+                    url: 'https://github.com/ajithselvam/java-jenkins-docker-project.git',
+                    branch: 'main',
+                    poll: false,
+                    changelog: true
+                )
+            }
+        }
+        
+        stage('list') {
+            steps {
+                dir("${env.DIR}") {
+                    sh 'ls'
+                }
+            }
+        }
+
+        stage('trivy file scan') {
+            steps {
+                dir("${env.DIR}") {
+                    // Scans the repository for vulnerabilities and misconfigurations
+                    sh 'trivy fs --severity HIGH,CRITICAL .'
+                }
+            }
+        }
+        
+        stage('maven build') {
+            steps {
+                dir("${env.DIR}") {
+                    sh 'mvn clean package'
+                }
+            }
+        }
+        
+        stage('maven compile') {
+            steps {
+                dir("${env.DIR}") {
+                    sh 'mvn compile'
+                }
+            }
+        }
+        
+        stage('maven test') {
+            steps {
+                dir("${env.DIR}") {
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage('sonarqube scan') {
+            steps {
+                dir("${env.DIR}") {
+                    // Requires "SonarQube Scanner" plugin and server configuration in Jenkins
+                    withSonarQubeEnv('sonar-server') { 
+                        sh 'mvn sonar:sonar'
+                    }
+                }
+            }
+        }
+        
+        stage('docker image build') {
+            steps {
+                dir("${env.DIR}") {
+                    sh "docker buildx build --platform=linux/amd64 -t ${env.IMAGE}:latest ."
+                }
+            }
+        }
+
+        stage('trivy image scan') {
+            steps {
+                dir("${env.DIR}") {
+                    // Scans the newly built image for vulnerabilities before running or pushing
+                    sh "trivy image --severity HIGH,CRITICAL ${env.IMAGE}:latest"
+                }
+            }
+        }
+        
+        stage('docker run container') {
+            steps {
+                dir("${env.DIR}") {
+                    sh "docker run --rm ${env.IMAGE}:latest"
+                }
+            }
+        }
+        
+        stage('docker tag (Docker Hub)') {
+            steps {
+                dir("${env.DIR}") {
+                    sh "docker tag ${env.IMAGE}:latest ${env.REPO}:latest"
+                }
+            }
+        }
+        
+        stage('docker login & push (Docker Hub)') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push ${REPO}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Push to GCP Artifact Registry') {
+            steps {
+                // Requires GCP Service Account JSON key stored in Jenkins credentials
+                withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GC_KEY')]) {
+                    sh '''
+                    gcloud auth activate-service-account --key-file=${GC_KEY}
+                    gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
+                    
+                    docker tag ${IMAGE}:latest ${GAR_IMAGE}:latest
+                    docker push ${GAR_IMAGE}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to GKE') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GC_KEY')]) {
+                    sh '''
+                    gcloud auth activate-service-account --key-file=${GC_KEY}
+                    gcloud container clusters get-credentials ${GKE_CLUSTER} --zone ${GKE_ZONE} --project ${GCP_PROJECT_ID}
+                    
+                    # Assuming you have a kubernetes manifest directory (e.g., k8s/) in your repo
+                    # kubectl apply -f k8s/
+                    
+                    # Example of imperatively updating the deployment with the new image
+                    # kubectl set image deployment/my-java-app my-java-app-container=${GAR_IMAGE}:latest
+                    '''
+                }
+            }
+        }
+        
+        stage('all done') {
+            steps {
+                sh 'echo "all done at $(date) by $(whoami)"'
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'succ'
+        }
+        failure {
+            echo 'failed'
+        }
+        always {
+            echo 'completed and cleaning up'
+            cleanWs()
+        }
+    }
+}
